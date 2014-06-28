@@ -34,7 +34,8 @@ unless Redmine::Plugin.registered_plugins.keys.include?(XLSE_AssetHelpers::PLUGI
                'created_format' => "dd.mm.yyyy hh:mm:ss",
                'updated_format' => "dd.mm.yyyy hh:mm:ss",
                'start_date_format' => "dd.mm.yyyy",
-               'due_date_format' => "dd.mm.yyyy"
+               'due_date_format' => "dd.mm.yyyy",
+               'expand_assigned_to' => '0'
              })
 
     requires_redmine :version_or_higher => '1.3.0'

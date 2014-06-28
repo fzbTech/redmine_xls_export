@@ -203,6 +203,7 @@ module Redmine
 # :attachments - export attachments info
 # :query_columns_only - export only columns from actual query
 # :group - group by query grouping
+# :expand_assigned_to - export issue once for each member of the assigned_to group
       def issues_to_xls2(issues, project, query, options = {})
 
         Spreadsheet.client_encoding = 'UTF-8'
@@ -212,6 +213,8 @@ module Redmine
         group_by_query=query.grouped? ? options[:group] : false
         book = Spreadsheet::Workbook.new
         issue_columns = create_issue_columns(project, query, options)
+        
+        expand_assigned_to = (options[:expand_assigned_to] == '1') && (issue_columns.count{ |col| col.name == :assigned_to} > 0)
 
         sheet1 = nil
         group = false
@@ -235,82 +238,95 @@ module Redmine
             end
           end
 
-          row = sheet1.row(idx+1)
-          init_row(row, query, issue.id)
+          ######################
+          issue_assigned_to = [issue.assigned_to]
+          if expand_assigned_to && issue.assigned_to.is_a?(Group)
+            issue_assigned_to = issue.assigned_to.users
+          end
+          ######################
+          
+          issue_assigned_to.each do |assigned_to|
+            
+            row = sheet1.row(idx+1)
+            init_row(row, query, issue.id)
 
-          lf_pos = get_value_width(issue.id)
-          columns_width[0] = lf_pos unless columns_width[0] >= lf_pos
+            lf_pos = get_value_width(issue.id)
+            columns_width[0] = lf_pos unless columns_width[0] >= lf_pos
 
-          last_prj = project
+            last_prj = project
 
-          issue_columns.each_with_index do |c, j|
-            v = if c.is_a?(QueryCustomFieldColumn)
-              value = issue.custom_field_values.detect {|v| v.custom_field == c.custom_field}
-              show_value_for_xls(value) unless value.nil?
-            else
-              case c.name
-                when :done_ratio
-                  (Float(issue.send(c.name)))/100
-                when :description
-                  descr_str = ''
-                  issue.description.to_s.each_char do |c_a|
-                    if c_a != "\r"
-                      descr_str << c_a
-                    end
-                  end
-                  descr_str
-                when :formatted_relations
-                  rel_str = ''
-                  relations = issue.relations.select {|r| r.other_issue(issue).visible?}
-                  relations.each do |relation|
-                    rel_str << l(relation.label_for(issue)) << ' '
-                    rel_str << relation.other_issue(issue).tracker.to_s << ' #'
-                    rel_str << relation.other_issue(issue).id.to_s
-                    rel_str << "\n" unless relation == relations.last
-                  end unless relations.empty?
-                  rel_str
-                when :watcher
-                  rel_str=''
-                  if(User.current.allowed_to?(:view_issue_watchers, last_prj) && !issue.watcher_users.empty?)
-                    rel_str = issue.watcher_users.collect(&:to_s).join("\n")
-                    #issue.watcher_users.each do |user|
-                    #  rel_str << user.to_s
-                    #  rel_str << "\n" unless user == issue.watcher_users.last
-                    #end
-                  end
-                  rel_str
-                when :spent_time
-                  if User.current.allowed_to?(:view_time_entries, last_prj)
-                    c.value(issue)
-                  else
-                    ''
-                  end
-                when :attachments
-                  c.value(issue)
-                when :journal
-                  c.value(issue)
-                when :project
-                  last_prj = issue.send(c.name)
-                  last_prj
+            issue_columns.each_with_index do |c, j|
+              v = if c.is_a?(QueryCustomFieldColumn)
+                value = issue.custom_field_values.detect {|v| v.custom_field == c.custom_field}
+                show_value_for_xls(value) unless value.nil?
               else
-                issue.respond_to?(c.name) ? issue.send(c.name) : c.value(issue)
+                case c.name
+                  when :done_ratio
+                    (Float(issue.send(c.name)))/100
+                  when :description
+                    descr_str = ''
+                    issue.description.to_s.each_char do |c_a|
+                      if c_a != "\r"
+                        descr_str << c_a
+                      end
+                    end
+                    descr_str
+                  when :formatted_relations
+                    rel_str = ''
+                    relations = issue.relations.select {|r| r.other_issue(issue).visible?}
+                    relations.each do |relation|
+                      rel_str << l(relation.label_for(issue)) << ' '
+                      rel_str << relation.other_issue(issue).tracker.to_s << ' #'
+                      rel_str << relation.other_issue(issue).id.to_s
+                      rel_str << "\n" unless relation == relations.last
+                    end unless relations.empty?
+                    rel_str
+                  when :watcher
+                    rel_str=''
+                    if(User.current.allowed_to?(:view_issue_watchers, last_prj) && !issue.watcher_users.empty?)
+                      rel_str = issue.watcher_users.collect(&:to_s).join("\n")
+                      #issue.watcher_users.each do |user|
+                      #  rel_str << user.to_s
+                      #  rel_str << "\n" unless user == issue.watcher_users.last
+                      #end
+                    end
+                    rel_str
+                  when :spent_time
+                    if User.current.allowed_to?(:view_time_entries, last_prj)
+                      c.value(issue)
+                    else
+                      ''
+                    end
+                  when :attachments
+                    c.value(issue)
+                  when :journal
+                    c.value(issue)
+                  when :project
+                    last_prj = issue.send(c.name)
+                    last_prj
+                  when :assigned_to
+                    assigned_to.to_s
+                  when :estimated_hours
+                    (Float(issue.send(c.name)))/issue_assigned_to.count
+                else
+                  issue.respond_to?(c.name) ? issue.send(c.name) : c.value(issue)
+                end
+              end
+
+              value = %w(Time Date Fixnum Float Integer String).include?(v.class.name) ? v : v.to_s
+
+              lf_pos = get_value_width(value)
+              index = has_id?(query) ? j : j + 1
+              columns_width[index] = lf_pos unless columns_width[index] >= lf_pos
+              if c.name == :id
+                insert_issue_id(row, issue)
+              else
+                row << value
               end
             end
 
-            value = %w(Time Date Fixnum Float Integer String).include?(v.class.name) ? v : v.to_s
-
-            lf_pos = get_value_width(value)
-            index = has_id?(query) ? j : j + 1
-            columns_width[index] = lf_pos unless columns_width[index] >= lf_pos
-            if c.name == :id
-              insert_issue_id(row, issue)
-            else
-              row << value
-            end
+            idx = idx + 1
           end
-
-          idx = idx + 1
-
         end
 
         if sheet1
