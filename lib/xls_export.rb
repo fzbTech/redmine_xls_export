@@ -307,7 +307,11 @@ module Redmine
                   when :assigned_to
                     assigned_to.to_s
                   when :estimated_hours
-                    (Float(issue.send(c.name)))/issue_assigned_to.count
+                    if issue.estimated_hours
+                      Float(issue.estimated_hours)/issue_assigned_to.count
+                    else
+                      issue.estimated_hours
+                    end
                 else
                   issue.respond_to?(c.name) ? issue.send(c.name) : c.value(issue)
                 end
