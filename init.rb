@@ -13,7 +13,7 @@ unless Redmine::Plugin.registered_plugins.keys.include?(XLSE_AssetHelpers::PLUGI
     author 'Vitaly Klimov'
     author_url 'mailto:vitaly.klimov@snowbirdgames.com'
     description 'Export issues to XLS files including journals, descriptions, etc. This plugin requires spreadsheet gem.'
-    version '0.2.1.t6'
+    version '0.2.1.t7'
 
     settings(:partial => 'settings/xls_export_settings',
              :default => {
@@ -35,7 +35,8 @@ unless Redmine::Plugin.registered_plugins.keys.include?(XLSE_AssetHelpers::PLUGI
                'updated_format' => "dd.mm.yyyy hh:mm:ss",
                'start_date_format' => "dd.mm.yyyy",
                'due_date_format' => "dd.mm.yyyy",
-               'expand_assigned_to' => '0'
+               'expand_assigned_to' => '0',
+               'closed_date_format' => "dd.mm.yyyy hh:mm:ss"
              })
 
     requires_redmine :version_or_higher => '1.3.0'

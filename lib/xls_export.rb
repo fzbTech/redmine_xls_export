@@ -37,6 +37,20 @@ class XLS_QueryColumn
   def css_classes
     name
   end
+
+  # for redmine_category_tree plugin
+  def h(s)
+    s
+  end
+
+  # for redmine_category_tree plugin
+  def content_tag(name, content_or_options_with_block = nil, options = nil, escape = true)
+    if options[:class] == "parent"
+      content_or_options_with_block + " > "
+    else
+      content_or_options_with_block
+    end
+  end
 end
 
 class XLS_SpentTimeQueryColumn < XLS_QueryColumn
@@ -120,6 +134,7 @@ module Redmine
         add_date_format(date_formats, :updated_on, options[:updated_format], l("default_updated_format"))
         add_date_format(date_formats, :start_date, options[:start_date_format],l("default_start_date_format"))
         add_date_format(date_formats, :due_date, options[:due_date_format], l("default_due_date_format"))
+        add_date_format(date_formats, :closed_on, options[:closed_date_format], l("default_closed_date_format"))
 
         date_formats
       end
@@ -177,7 +192,7 @@ module Redmine
 
         (options[:query_columns_only] == '1' ? query.columns : query.available_columns).each do |c|
           case c.name
-            when :formatted_relations
+            when :relations
               issue_columns << c if options[:relations] == '1'
             when :estimated_hours
               issue_columns << XLS_SpentTimeQueryColumn.new(:spent_time) if use_export_spent_time?(query, options)
@@ -192,6 +207,12 @@ module Redmine
         issue_columns << XLS_JournalQueryColumn.new(:journal) if options[:journal] == '1'
         issue_columns << QueryColumn.new(:description) if use_export_description_setting?(query, options)
         issue_columns
+      end
+
+      def localtime(datetime)
+        if datetime
+          User.current.time_zone ? datetime.in_time_zone(User.current.time_zone) : datetime.localtime
+        end
       end
 
 # options are
@@ -257,8 +278,29 @@ module Redmine
 
             issue_columns.each_with_index do |c, j|
               v = if c.is_a?(QueryCustomFieldColumn)
-                value = issue.custom_field_values.detect {|v| v.custom_field == c.custom_field}
-                show_value_for_xls(value) unless value.nil?
+                case c.custom_field.field_format
+                  when "int"
+                    begin
+                      Integer(issue.custom_value_for(c.custom_field).to_s)
+                    rescue
+                      show_value_for_xls(issue.custom_value_for(c.custom_field))
+                    end
+                  when "float"
+                    begin
+                      Float(issue.custom_value_for(c.custom_field).to_s)
+                    rescue
+                      show_value_for_xls(issue.custom_value_for(c.custom_field))
+                    end
+                  when "date"
+                    begin
+                      Date.parse(issue.custom_value_for(c.custom_field).to_s)
+                    rescue
+                      show_value_for_xls(issue.custom_value_for(c.custom_field))
+                    end
+                  else
+                    value = issue.custom_field_values.detect {|v| v.custom_field == c.custom_field}
+                    show_value_for_xls(value) unless value.nil?
+                end
               else
                 case c.name
                   when :done_ratio
@@ -271,7 +313,7 @@ module Redmine
                       end
                     end
                     descr_str
-                  when :formatted_relations
+                  when :relations
                     rel_str = ''
                     relations = issue.relations.select {|r| r.other_issue(issue).visible?}
                     relations.each do |relation|
@@ -312,6 +354,9 @@ module Redmine
                     else
                       issue.estimated_hours
                     end
+                  when :created_on, :updated_on, :closed_on
+                    datetime = issue.respond_to?(c.name) ? issue.send(c.name) : c.value(issue)
+                    localtime(datetime)
                 else
                   issue.respond_to?(c.name) ? issue.send(c.name) : c.value(issue)
                 end
@@ -375,7 +420,7 @@ module Redmine
             end
             notes=(journal.notes? ? journal.notes.to_s : '')
 
-            [idx+1,journal.created_on,journal.user.name,details,notes].each_with_index do |e,e_idx|
+            [idx+1,localtime(journal.created_on),journal.user.name,details,notes].each_with_index do |e,e_idx|
               lf_pos = get_value_width(e)
               columns_width[e_idx] = lf_pos unless columns_width[e_idx] >= lf_pos
               row << e
@@ -436,7 +481,7 @@ module Redmine
                 opt[:number_format] = '0%'
               when :estimated_hours, :spent_time
                 opt[:number_format] = "0.0"
-              when :created_on, :updated_on, :start_date, :due_date
+              when :created_on, :updated_on, :start_date, :due_date, :closed_on
                 opt[:number_format] = date_formats[c.name]
             end
           end
@@ -581,7 +626,7 @@ module Redmine
                 project = issue.respond_to?(:project) ? issue.send(:project).name : issue.project_id.to_s
                 status_from = get_issue_status(detail.old_value, issue_statuses)
                 status_to = get_issue_status(detail.value, issue_statuses)
-                [issue.id, project, issue.created_on, journal.created_on, status_from, status_to].each_with_index do |e, e_idx|
+                [issue.id, project, localtime(issue.created_on), localtime(journal.created_on), status_from, status_to].each_with_index do |e, e_idx|
                   lf_pos = get_value_width(e)
                   columns_width[e_idx] = lf_pos unless columns_width[e_idx] >= lf_pos
                   row << e
