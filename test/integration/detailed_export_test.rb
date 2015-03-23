@@ -2,7 +2,7 @@
 
 require File.expand_path(File.dirname(__FILE__) + '/../test_helper')
 
-class DetailedExportTest < ActionController::IntegrationTest
+class DetailedExportTest < Redmine::IntegrationTest
   fixtures :projects, :trackers, :issue_statuses, :issues,
            :enumerations, :users, :issue_categories, :queries,
            :projects_trackers, :issue_relations, :watchers,
@@ -102,6 +102,13 @@ class DetailedExportTest < ActionController::IntegrationTest
     fill_in 'settings_export_name', :with => 'test'
     click_button_and_wait 'Export'
     assert_to_export 'test', 'xls', true
+  end
+
+  def test_to_export_with_strip_html_tags
+    uncheck 'settings_generate_name'
+    check 'settings_strip_html_tags'
+    click_button_and_wait 'Export'
+    assert_to_export 'issues_export', 'xls', false
   end
 
   def assert_export_options(option, generated = false)

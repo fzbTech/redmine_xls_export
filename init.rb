@@ -13,7 +13,7 @@ unless Redmine::Plugin.registered_plugins.keys.include?(XLSE_AssetHelpers::PLUGI
     author 'Vitaly Klimov'
     author_url 'mailto:vitaly.klimov@snowbirdgames.com'
     description 'Export issues to XLS files including journals, descriptions, etc. This plugin requires spreadsheet gem.'
-    version '0.2.1.t7'
+    version '0.2.1.t8'
 
     settings(:partial => 'settings/xls_export_settings',
              :default => {
@@ -26,6 +26,7 @@ unless Redmine::Plugin.registered_plugins.keys.include?(XLSE_AssetHelpers::PLUGI
                'query_columns_only' => '0',
                'group' => '0',
                'generate_name' => '1',
+               'strip_html_tags' => '0',
                'export_attached' => '0',
                'separate_journals' => '0',
                'export_status_histories' => '0',
